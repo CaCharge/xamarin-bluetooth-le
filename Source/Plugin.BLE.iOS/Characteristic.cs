@@ -20,6 +20,8 @@ namespace Plugin.BLE.iOS
         private readonly CBCharacteristic _nativeCharacteristic;
         private readonly CBPeripheral _parentDevice;
         private readonly IBleCentralManagerDelegate _bleCentralManagerDelegate;
+        private bool _isReading;
+        private bool _notificationEnabled;
 
         public override event EventHandler<CharacteristicUpdatedEventArgs> ValueUpdated;
 
@@ -114,8 +116,16 @@ namespace Plugin.BLE.iOS
                             complete(Value);
                         }
                     },
-                    subscribeComplete: handler => _parentDevice.UpdatedCharacterteristicValue += handler,
-                    unsubscribeComplete: handler => _parentDevice.UpdatedCharacterteristicValue -= handler,
+                    subscribeComplete: handler => {
+                        _parentDevice.UpdatedCharacterteristicValue += handler;
+                        if(_notificationEnabled)
+                            _isReading = true;
+                    },
+                    unsubscribeComplete: handler => {
+                        _parentDevice.UpdatedCharacterteristicValue -= handler;
+                        if(_notificationEnabled)
+                            _isReading = false;
+                    },
                     getRejectHandler: reject => ((sender, args) =>
                     {
                         if (args.Peripheral.Identifier == _parentDevice.Identifier)
@@ -222,6 +232,7 @@ namespace Plugin.BLE.iOS
                       {
                           Trace.Message($"StartUpdates IsNotifying: {args.Characteristic.IsNotifying}");
                           complete(args.Characteristic.IsNotifying);
+                          _notificationEnabled = true;
                       }
                   },
                   subscribeComplete: handler => _parentDevice.UpdatedNotificationState += handler,
@@ -263,6 +274,7 @@ namespace Plugin.BLE.iOS
                     {
                         Trace.Message($"StopUpdates IsNotifying: {args.Characteristic.IsNotifying}");
                         complete(args.Characteristic.IsNotifying);
+                        _notificationEnabled = false;
                     }
                 },
                 subscribeComplete: handler => _parentDevice.UpdatedNotificationState += handler,
@@ -281,7 +293,8 @@ namespace Plugin.BLE.iOS
         {
             if (e.Characteristic.UUID == _nativeCharacteristic.UUID)
             {
-                ValueUpdated?.Invoke(this, new CharacteristicUpdatedEventArgs(this));
+                if(!_isReading)
+                    ValueUpdated?.Invoke(this, new CharacteristicUpdatedEventArgs(this));
             }
         }
     }
